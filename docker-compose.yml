@@ -1,0 +1,13 @@
+---
+services:
+  arch_ai:
+    build: .
+    ports: ['${PORT:-8080}:${PORT:-8080}']
+    environment:
+      AI_PROVIDER: ${AI_PROVIDER}
+      GEMINI_API_KEY: '{GEMINI_API_KEY}'
+      PORT: ${PORT:-8080}
+      # CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-6}
+      MAX_TOKENS: ${MAX_TOKENS:-4096}
+      RUST_LOG: ${RUST_LOG:-arch_ai=info,tower_http=info}
+    restart: unless-stopped
