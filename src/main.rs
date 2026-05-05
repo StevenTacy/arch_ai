@@ -15,6 +15,7 @@ mod error;
 mod handlers;
 mod models;
 mod provider;
+mod ui_handlers;
 
 use config::ProviderKind;
 use handlers::AppState;
@@ -48,6 +49,8 @@ async fn main() -> anyhow::Result<()> {
         .allow_headers(Any);
 
     let app = Router::new()
+        .route("/", get(ui_handlers::index))
+        .route("/ui/chat", post(ui_handlers::ui_chat))
         .route("/health", get(handlers::health))
         .route("/chat", post(handlers::chat))
         .with_state(provider)
