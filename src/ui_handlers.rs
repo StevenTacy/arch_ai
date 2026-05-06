@@ -6,12 +6,13 @@ use maud::{DOCTYPE, Markup, PreEscaped, html};
 use serde::Deserialize;
 
 use crate::{
+    db,
     handlers::AppState,
     models::{Message, Role},
+    session,
 };
 
 const MAX_MESSAGE_CHARS: usize = 2000;
-const MAX_HISTORY_TURNS: usize = 20;
 
 // ─────────────────────────────────────────────────────────────────
 // Handlers
@@ -24,16 +25,12 @@ pub async fn index() -> Html<String> {
 #[derive(Deserialize)]
 pub struct UiChatForm {
     #[serde(default)]
-    pub message: String,
-    #[serde(default = "empty_history")]
-    pub history: String,
+    message: String,
+    #[serde(default)]
+    session_id: Option<String>,
 }
 
-fn empty_history() -> String {
-    "[]".to_string()
-}
-
-pub async fn ui_chat(State(state): State<AppState>, Form(form): Form<UiChatForm>) -> Html<String> {
+pub async fn chat(State(state): State<AppState>, Form(form): Form<UiChatForm>) -> Html<String> {
     let message = form.message.trim().to_string();
 
     if message.is_empty() {
@@ -49,19 +46,59 @@ pub async fn ui_chat(State(state): State<AppState>, Form(form): Form<UiChatForm>
         );
     }
 
-    let mut messages: Vec<Message> = serde_json::from_str(&form.history).unwrap_or_default();
+    let mut redis = match state.redis() {
+        Some(r) => r,
+        None => {
+            return Html(
+                error_fragment(
+                    "對話記錄服務未啟用，請聯繫管理員。/ Session storage not configured.",
+                )
+                .into_string(),
+            );
+        }
+    };
 
-    if messages.len() > MAX_HISTORY_TURNS {
-        let excess = messages.len() - MAX_HISTORY_TURNS;
-        messages.drain(0..excess);
+    let session_id = form
+        .session_id
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(session::new_session_id);
+
+    let mut session_messages = match session::get_session(&mut redis, &session_id).await {
+        Ok(msgs) => msgs,
+        Err(e) => {
+            tracing::error!(error = %e, "session load failed");
+            return Html(
+                error_fragment(
+                    "無法載入對話記錄，請重新整理。/ Session load failed, please refresh.",
+                )
+                .into_string(),
+            );
+        }
+    };
+
+    // RAG: inject relevant law chunks as ephemeral context (not persisted to session)
+    let rag_context = if let Some(pool) = state.db() {
+        match db::search_law(pool, &message, state.rag_top_k()).await {
+            Ok(chunks) if !chunks.is_empty() => Some(db::format_chunks(&chunks)),
+            Ok(_) => None,
+            Err(e) => {
+                tracing::warn!(error = %e, "law search failed, proceeding without RAG");
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    let mut api_messages: Vec<Message> = Vec::new();
+    if let Some(ctx) = rag_context {
+        api_messages.push(Message::new(Role::User, format!("[法條參考資料]\n{ctx}")));
+        api_messages.push(Message::new(Role::Assistant, "已閱讀法條參考資料，請提問。"));
     }
+    api_messages.extend(session_messages.clone());
+    api_messages.push(Message::new(Role::User, message.clone()));
 
-    messages.push(Message {
-        role: Role::User,
-        content: message.clone(),
-    });
-
-    let reply = match state.provider.chat(messages.clone()).await {
+    let reply = match state.provider().chat(api_messages).await {
         Ok(r) => r,
         Err(e) => {
             tracing::error!(error = %e, "AI provider error");
@@ -74,14 +111,22 @@ pub async fn ui_chat(State(state): State<AppState>, Form(form): Form<UiChatForm>
         }
     };
 
-    messages.push(Message {
-        role: Role::Assistant,
-        content: reply.clone(),
-    });
+    session_messages.push(Message::new(Role::User, message.clone()));
+    session_messages.push(Message::new(Role::Assistant, reply.clone()));
 
-    let history_json = serde_json::to_string(&messages).unwrap_or_else(|_| "[]".to_string());
+    if let Err(e) = session::save_session(
+        &mut redis,
+        &session_id,
+        &session_messages,
+        state.session_ttl_secs(),
+    )
+    .await
+    {
+        // Non-fatal: reply is still returned; session just won't persist this turn
+        tracing::error!(error = %e, "session save failed");
+    }
 
-    Html(chat_fragment(&message, &reply, &history_json).into_string())
+    Html(chat_fragment(&message, &reply, &session_id).into_string())
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -155,12 +200,12 @@ fn page() -> Markup {
                                 span { "AI 分析法條中…" }
                             }
                             form id="chat-form"
-                                 hx-post="/v2/chat"
+                                 hx-post="/chat"
                                  hx-target="#messages"
                                  hx-swap="beforeend"
                                  hx-indicator="#thinking"
                                  hx-disabled-elt="find .send-btn" {
-                                input type="hidden" id="history-input" name="history" value="[]";
+                                input type="hidden" id="session-id-input" name="session_id" value="";
                                 div class="input-box" {
                                     textarea
                                         id="message-input"
@@ -186,11 +231,11 @@ fn page() -> Markup {
     }
 }
 
-fn chat_fragment(user_msg: &str, assistant_msg: &str, history_json: &str) -> Markup {
+fn chat_fragment(user_msg: &str, assistant_msg: &str, session_id: &str) -> Markup {
     html! {
-        // OOB: update hidden history field
-        input id="history-input" type="hidden" name="history"
-              value=(history_json) hx-swap-oob="true";
+        // OOB: persist session_id for next turn
+        input id="session-id-input" type="hidden" name="session_id"
+              value=(session_id) hx-swap-oob="true";
 
         // OOB: clear textarea
         textarea id="message-input" name="message"

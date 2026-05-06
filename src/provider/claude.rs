@@ -29,8 +29,8 @@ impl ClaudeProvider {
 impl AiProvider for ClaudeProvider {
     async fn chat(&self, messages: Vec<Message>) -> Result<String, AppError> {
         let body = ClaudeRequest {
-            model: &self.config.model,
-            max_tokens: self.config.max_tokens,
+            model: self.config.model(),
+            max_tokens: self.config.max_tokens(),
             system: SYSTEM_PROMPT,
             messages,
         };
@@ -38,7 +38,7 @@ impl AiProvider for ClaudeProvider {
         let response = self
             .http
             .post(API_URL)
-            .header("x-api-key", &self.config.api_key)
+            .header("x-api-key", self.config.api_key())
             .header("anthropic-version", API_VERSION)
             .json(&body)
             .send()

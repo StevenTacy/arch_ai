@@ -12,6 +12,7 @@ pub struct OpenAiProvider {
     http: reqwest::Client,
     config: Config,
 }
+
 static API_URL: &str = "https://api.openai.com/v1";
 
 impl OpenAiProvider {
@@ -38,24 +39,24 @@ impl AiProvider for OpenAiProvider {
         });
         for m in messages {
             oai_messages.push(OpenAiMessage {
-                role: match m.role {
+                role: match m.role() {
                     Role::User => "user",
                     Role::Assistant => "assistant",
                 },
-                content: m.content,
+                content: m.content().to_string(),
             });
         }
 
         let body = OpenAiRequest {
-            model: &self.config.model,
+            model: self.config.model(),
             messages: oai_messages,
-            max_tokens: self.config.max_tokens,
+            max_tokens: self.config.max_tokens(),
         };
 
         let response = self
             .http
             .post(self.api_url())
-            .bearer_auth(&self.config.api_key)
+            .bearer_auth(self.config.api_key())
             .json(&body)
             .send()
             .await?;

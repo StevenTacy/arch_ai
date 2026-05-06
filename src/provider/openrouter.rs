@@ -32,7 +32,7 @@ pub async fn discover_free_model(config: &Config) -> Result<String, AppError> {
 
     let response = http
         .get(format!("{BASE_URL}/models"))
-        .bearer_auth(&config.api_key)
+        .bearer_auth(config.api_key())
         .send()
         .await?;
 
@@ -75,24 +75,24 @@ impl AiProvider for OpenRouterProvider {
         });
         for m in messages {
             oai_messages.push(OaiMessage {
-                role: match m.role {
+                role: match m.role() {
                     Role::User => "user",
                     Role::Assistant => "assistant",
                 },
-                content: m.content,
+                content: m.content().to_string(),
             });
         }
 
         let body = OaiRequest {
-            model: &self.config.model,
+            model: self.config.model(),
             messages: oai_messages,
-            max_tokens: self.config.max_tokens,
+            max_tokens: self.config.max_tokens(),
         };
 
         let response = self
             .http
             .post(format!("{BASE_URL}/chat/completions"))
-            .bearer_auth(&self.config.api_key)
+            .bearer_auth(self.config.api_key())
             .header("HTTP-Referer", "https://github.com/arch-ai")
             .header("X-Title", APP_TITLE)
             .json(&body)

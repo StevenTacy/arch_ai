@@ -43,21 +43,21 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = config::Config::from_env()?;
-    let port = config.port;
+    let port = config.port();
 
-    tracing::info!(provider = ?config.provider, model = %config.model, "starting arch_ai");
+    tracing::info!(provider = ?config.provider(), model = %config.model(), "starting arch_ai");
 
-    let provider: Arc<dyn provider::AiProvider + Send + Sync> = match config.provider {
+    let provider: Arc<dyn provider::AiProvider + Send + Sync> = match config.provider().clone() {
         ProviderKind::Claude => Arc::new(ClaudeProvider::new(config.clone())),
         ProviderKind::Gemini => Arc::new(GeminiProvider::new(config.clone())),
         ProviderKind::OpenAi => Arc::new(OpenAiProvider::new(config.clone())),
         ProviderKind::Mock => Arc::new(MockProvider::new()),
         ProviderKind::OpenRouter => {
-            if config.api_key.is_empty() {
+            if config.api_key().is_empty() {
                 tracing::warn!("OPENROUTER_API_KEY not set — running in demo mode (Mock)");
                 Arc::new(MockProvider::new()) as Arc<dyn provider::AiProvider + Send + Sync>
             } else {
-                let resolved_model = if config.model == "auto" {
+                let resolved_model = if config.model() == "auto" {
                     match discover_free_model(&config).await {
                         Ok(m) => {
                             tracing::info!(model = %m, "OpenRouter: auto-selected free model");
@@ -70,10 +70,9 @@ async fn main() -> anyhow::Result<()> {
                         }
                     }
                 } else {
-                    config.model.clone()
+                    config.model().to_string()
                 };
-                let mut cfg = config.clone();
-                cfg.model = resolved_model;
+                let cfg = config.clone().with_model(resolved_model);
                 Arc::new(OpenRouterProvider::new(cfg))
                     as Arc<dyn provider::AiProvider + Send + Sync>
             }
@@ -81,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // PostgreSQL pool — optional; enables RAG when DATABASE_URL is set
-    let db_pool = match &config.database_url {
+    let db_pool = match config.database_url() {
         Some(url) => {
             let pool = PgPoolOptions::new()
                 .max_connections(5)
@@ -103,10 +102,10 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    // Redis connection manager — optional; required for /v2/chat
-    let redis_conn = match &config.redis_url {
+    // Redis connection manager — optional; enables session-based chat
+    let redis_conn = match config.redis_url() {
         Some(url) => {
-            let client = redis::Client::open(url.as_str())
+            let client = redis::Client::open(url)
                 .map_err(|e| anyhow::anyhow!("Invalid Redis URL: {e}"))?;
             let manager = redis::aio::ConnectionManager::new(client)
                 .await
@@ -116,18 +115,18 @@ async fn main() -> anyhow::Result<()> {
             Some(manager)
         }
         None => {
-            tracing::info!("REDIS_URL not set — /v2/chat will return 503");
+            tracing::info!("REDIS_URL not set — session-based chat disabled");
             None
         }
     };
 
-    let app_state = AppState {
+    let app_state = AppState::new(
         provider,
-        db: db_pool,
-        redis: redis_conn,
-        rag_top_k: config.rag_top_k,
-        session_ttl_secs: config.session_ttl_secs,
-    };
+        db_pool,
+        redis_conn,
+        config.rag_top_k(),
+        config.session_ttl_secs(),
+    );
 
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -137,10 +136,8 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .nest_service("/static", ServeDir::new("static"))
         .route("/", get(ui_handlers::index))
-        .route("/ui/chat", post(ui_handlers::ui_chat))
+        .route("/chat", post(ui_handlers::chat))
         .route("/health", get(handlers::health))
-        .route("/chat", post(handlers::chat))
-        .route("/v2/chat", post(handlers::chat_v2))
         .with_state(app_state)
         .layer(cors)
         .layer(TraceLayer::new_for_http());

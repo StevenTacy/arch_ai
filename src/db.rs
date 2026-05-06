@@ -4,9 +4,9 @@ use crate::error::AppError;
 
 #[derive(sqlx::FromRow)]
 pub struct LawChunk {
-    pub law_name: String,
-    pub article_number: String,
-    pub content: String,
+    law_name: String,
+    article_number: String,
+    content: String,
 }
 
 /// Full-text search over law_chunks using PostgreSQL tsvector.

@@ -32,23 +32,59 @@ impl FromStr for ProviderKind {
 
 #[derive(Debug, Clone)]
 pub struct Config {
-    pub provider: ProviderKind,
-    pub api_key: String,
-    pub port: u16,
-    /// Model ID forwarded to the provider API.
-    pub model: String,
-    pub max_tokens: u32,
-    /// PostgreSQL connection string. If absent, RAG is disabled.
-    pub database_url: Option<String>,
-    /// Redis connection string. If absent, /v2/chat returns 503.
-    pub redis_url: Option<String>,
-    /// Number of law chunks to retrieve per query.
-    pub rag_top_k: i64,
-    /// Redis session TTL in seconds.
-    pub session_ttl_secs: u64,
+    provider: ProviderKind,
+    api_key: String,
+    port: u16,
+    model: String,
+    max_tokens: u32,
+    database_url: Option<String>,
+    redis_url: Option<String>,
+    rag_top_k: i64,
+    session_ttl_secs: u64,
 }
 
 impl Config {
+    pub fn provider(&self) -> &ProviderKind {
+        &self.provider
+    }
+
+    pub fn api_key(&self) -> &str {
+        &self.api_key
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
+    pub fn model(&self) -> &str {
+        &self.model
+    }
+
+    pub fn max_tokens(&self) -> u32 {
+        self.max_tokens
+    }
+
+    pub fn database_url(&self) -> Option<&str> {
+        self.database_url.as_deref()
+    }
+
+    pub fn redis_url(&self) -> Option<&str> {
+        self.redis_url.as_deref()
+    }
+
+    pub fn rag_top_k(&self) -> i64 {
+        self.rag_top_k
+    }
+
+    pub fn session_ttl_secs(&self) -> u64 {
+        self.session_ttl_secs
+    }
+
+    pub fn with_model(mut self, model: String) -> Self {
+        self.model = model;
+        self
+    }
+
     pub fn from_env() -> Result<Self, AppError> {
         let provider: ProviderKind = std::env::var("AI_PROVIDER")
             .unwrap_or_else(|_| "claude".into())
@@ -102,12 +138,6 @@ impl Config {
             .unwrap_or_else(|_| "3600".into())
             .parse::<u64>()
             .map_err(|_| AppError::Config("SESSION_TTL_SECS must be a positive integer".into()))?;
-
-        let ollama_base_url =
-            std::env::var("OLLAMA_BASE_URL").unwrap_or_else(|_| "http://localhost:11434/v1".into());
-
-        let openai_base_url =
-            std::env::var("OPENAI_BASE_URL").unwrap_or_else(|_| "https://api.openai.com/v1".into());
 
         Ok(Self {
             provider,

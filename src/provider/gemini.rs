@@ -24,7 +24,8 @@ impl GeminiProvider {
     fn api_url(&self) -> String {
         format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-            self.config.model, self.config.api_key
+            self.config.model(),
+            self.config.api_key()
         )
     }
 }
@@ -36,12 +37,12 @@ impl AiProvider for GeminiProvider {
             .into_iter()
             .map(|m| GeminiContent {
                 // Gemini uses "user" and "model" (not "assistant")
-                role: match m.role {
+                role: match m.role() {
                     Role::User => "user",
                     Role::Assistant => "model",
                 }
                 .into(),
-                parts: vec![Part { text: m.content }],
+                parts: vec![Part { text: m.content().to_string() }],
             })
             .collect();
 
@@ -53,7 +54,7 @@ impl AiProvider for GeminiProvider {
             },
             contents,
             generation_config: GenerationConfig {
-                max_output_tokens: self.config.max_tokens,
+                max_output_tokens: self.config.max_tokens(),
             },
         };
 

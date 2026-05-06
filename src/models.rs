@@ -9,34 +9,20 @@ pub enum Role {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Message {
-    pub role: Role,
-    pub content: String,
+    role: Role,
+    content: String,
 }
 
-/// Inbound payload from the chat client.
-/// The client owns conversation history and sends the full message list each turn.
-#[derive(Debug, Deserialize)]
-pub struct ChatRequest {
-    pub messages: Vec<Message>,
-}
+impl Message {
+    pub fn new(role: Role, content: impl Into<String>) -> Self {
+        Self { role, content: content.into() }
+    }
 
-#[derive(Debug, Serialize)]
-pub struct ChatResponse {
-    pub message: String,
-}
+    pub fn role(&self) -> &Role {
+        &self.role
+    }
 
-/// Inbound payload for the stateful /v2/chat endpoint.
-/// Client sends only the current turn; server owns history via Redis.
-#[derive(Debug, Deserialize)]
-pub struct ChatRequestV2 {
-    /// Omit to start a new session; include to continue an existing one.
-    pub session_id: Option<String>,
-    pub message: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ChatResponseV2 {
-    /// Echo back so the client can persist it for subsequent turns.
-    pub session_id: String,
-    pub message: String,
+    pub fn content(&self) -> &str {
+        &self.content
+    }
 }

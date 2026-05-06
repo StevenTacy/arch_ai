@@ -18,8 +18,8 @@ impl AiProvider for MockProvider {
         let last = messages
             .iter()
             .rev()
-            .find(|m| matches!(m.role, crate::models::Role::User))
-            .map(|m| m.content.as_str())
+            .find(|m| matches!(m.role(), crate::models::Role::User))
+            .map(|m| m.content())
             .unwrap_or("");
 
         Ok(pick_response(last).to_string())
