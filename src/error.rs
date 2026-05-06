@@ -5,7 +5,6 @@ use axum::{
 };
 use thiserror::Error;
 
-/// Unified error type across all AI provider backends.
 #[derive(Debug, Error)]
 pub enum AppError {
     #[error("Provider API error: {0}")]
@@ -19,6 +18,12 @@ pub enum AppError {
 
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
+
+    #[error("Database error: {0}")]
+    Database(#[from] sqlx::Error),
+
+    #[error("Session error: {0}")]
+    Session(String),
 }
 
 impl IntoResponse for AppError {
@@ -35,6 +40,14 @@ impl IntoResponse for AppError {
             AppError::Serialization(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "response serialization failed".to_string(),
+            ),
+            AppError::Database(_) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "database unavailable".to_string(),
+            ),
+            AppError::Session(_) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "session store unavailable".to_string(),
             ),
         };
 

@@ -33,10 +33,7 @@ fn empty_history() -> String {
     "[]".to_string()
 }
 
-pub async fn ui_chat(
-    State(state): State<AppState>,
-    Form(form): Form<UiChatForm>,
-) -> Html<String> {
+pub async fn ui_chat(State(state): State<AppState>, Form(form): Form<UiChatForm>) -> Html<String> {
     let message = form.message.trim().to_string();
 
     if message.is_empty() {
@@ -59,7 +56,10 @@ pub async fn ui_chat(
         messages.drain(0..excess);
     }
 
-    messages.push(Message { role: Role::User, content: message.clone() });
+    messages.push(Message {
+        role: Role::User,
+        content: message.clone(),
+    });
 
     let reply = match state.provider.chat(messages.clone()).await {
         Ok(r) => r,
@@ -74,7 +74,10 @@ pub async fn ui_chat(
         }
     };
 
-    messages.push(Message { role: Role::Assistant, content: reply.clone() });
+    messages.push(Message {
+        role: Role::Assistant,
+        content: reply.clone(),
+    });
 
     let history_json = serde_json::to_string(&messages).unwrap_or_else(|_| "[]".to_string());
 
@@ -119,7 +122,7 @@ fn page() -> Markup {
                     div class="example" onclick="fillExample(this)" { "What are fire safety requirements under 消防法？" }
                     div class="example" onclick="fillExample(this)" { "公寓大廈管理條例主要規範哪些事項？" }
 
-                    div class="sidebar-footer" { "Powered by Claude · Legal AI" }
+                    div class="sidebar-footer" { "建築法規 AI · Legal Consultant" }
                 }
 
                 // ── Main ─────────────────────────────────────────────────
@@ -152,7 +155,7 @@ fn page() -> Markup {
                                 span { "AI 分析法條中…" }
                             }
                             form id="chat-form"
-                                 hx-post="/ui/chat"
+                                 hx-post="/v2/chat"
                                  hx-target="#messages"
                                  hx-swap="beforeend"
                                  hx-indicator="#thinking"
@@ -219,4 +222,3 @@ fn error_fragment(msg: &str) -> Markup {
         }
     }
 }
-

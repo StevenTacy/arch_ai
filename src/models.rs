@@ -24,3 +24,19 @@ pub struct ChatRequest {
 pub struct ChatResponse {
     pub message: String,
 }
+
+/// Inbound payload for the stateful /v2/chat endpoint.
+/// Client sends only the current turn; server owns history via Redis.
+#[derive(Debug, Deserialize)]
+pub struct ChatRequestV2 {
+    /// Omit to start a new session; include to continue an existing one.
+    pub session_id: Option<String>,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ChatResponseV2 {
+    /// Echo back so the client can persist it for subsequent turns.
+    pub session_id: String,
+    pub message: String,
+}

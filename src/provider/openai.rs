@@ -8,12 +8,11 @@ use crate::{
     provider::{AiProvider, SYSTEM_PROMPT},
 };
 
-const API_URL: &str = "https://api.openai.com/v1/chat/completions";
-
 pub struct OpenAiProvider {
     http: reqwest::Client,
     config: Config,
 }
+static API_URL: &str = "https://api.openai.com/v1";
 
 impl OpenAiProvider {
     pub fn new(config: Config) -> Self {
@@ -21,6 +20,10 @@ impl OpenAiProvider {
             http: reqwest::Client::new(),
             config,
         }
+    }
+
+    fn api_url(&self) -> String {
+        format!("{}/chat/completions", API_URL.trim_end_matches('/'))
     }
 }
 
@@ -51,7 +54,7 @@ impl AiProvider for OpenAiProvider {
 
         let response = self
             .http
-            .post(API_URL)
+            .post(self.api_url())
             .bearer_auth(&self.config.api_key)
             .json(&body)
             .send()
@@ -63,7 +66,9 @@ impl AiProvider for OpenAiProvider {
                 .text()
                 .await
                 .unwrap_or_else(|_| "<unreadable body>".into());
-            return Err(AppError::ProviderError(format!("[OpenAI] HTTP {status}: {text}")));
+            return Err(AppError::ProviderError(format!(
+                "[OpenAI] HTTP {status}: {text}"
+            )));
         }
 
         let resp: OpenAiResponse = response.json().await?;

@@ -4,7 +4,9 @@ use crate::{error::AppError, models::Message};
 
 pub mod claude;
 pub mod gemini;
+pub mod mock;
 pub mod openai;
+pub mod openrouter;
 
 /// System prompt shared by all providers.
 /// Scoped to Taiwan construction law. To change domain coverage, edit only this constant.
