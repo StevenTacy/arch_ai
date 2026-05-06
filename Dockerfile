@@ -13,6 +13,7 @@ RUN mkdir src && echo "fn main() {}" > src/main.rs \
   && cargo build --release \
   && rm -rf src
 
+COPY migrations ./migrations
 COPY src ./src
 RUN touch src/main.rs && cargo build --release
 
@@ -25,6 +26,7 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY --from=builder /app/target/release/arch_ai .
+COPY static ./static
 
 EXPOSE 8080
 CMD ["./arch_ai"]

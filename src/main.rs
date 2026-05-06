@@ -49,6 +49,7 @@ async fn main() -> anyhow::Result<()> {
         .allow_headers(Any);
 
     let app = Router::new()
+        .nest_service("/static", ServeDir::new("static"))
         .route("/", get(ui_handlers::index))
         .route("/ui/chat", post(ui_handlers::ui_chat))
         .route("/health", get(handlers::health))
