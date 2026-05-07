@@ -37,9 +37,7 @@ pub struct Config {
     port: u16,
     model: String,
     max_tokens: u32,
-    database_url: Option<String>,
     redis_url: Option<String>,
-    rag_top_k: i64,
     session_ttl_secs: u64,
 }
 
@@ -64,16 +62,8 @@ impl Config {
         self.max_tokens
     }
 
-    pub fn database_url(&self) -> Option<&str> {
-        self.database_url.as_deref()
-    }
-
     pub fn redis_url(&self) -> Option<&str> {
         self.redis_url.as_deref()
-    }
-
-    pub fn rag_top_k(&self) -> i64 {
-        self.rag_top_k
     }
 
     pub fn session_ttl_secs(&self) -> u64 {
@@ -126,13 +116,7 @@ impl Config {
             .parse::<u32>()
             .map_err(|_| AppError::Config("MAX_TOKENS must be a positive integer".into()))?;
 
-        let database_url = std::env::var("DATABASE_URL").ok();
         let redis_url = std::env::var("REDIS_URL").ok();
-
-        let rag_top_k = std::env::var("RAG_TOP_K")
-            .unwrap_or_else(|_| "5".into())
-            .parse::<i64>()
-            .map_err(|_| AppError::Config("RAG_TOP_K must be a positive integer".into()))?;
 
         let session_ttl_secs = std::env::var("SESSION_TTL_SECS")
             .unwrap_or_else(|_| "3600".into())
@@ -145,9 +129,7 @@ impl Config {
             port,
             model,
             max_tokens,
-            database_url,
             redis_url,
-            rag_top_k,
             session_ttl_secs,
         })
     }

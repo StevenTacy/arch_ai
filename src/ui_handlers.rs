@@ -1,12 +1,11 @@
 use axum::{
-    extract::{Form, State},
+    extract::{Form, Path, State},
     response::Html,
 };
 use maud::{DOCTYPE, Markup, PreEscaped, html};
 use serde::Deserialize;
 
 use crate::{
-    db,
     handlers::AppState,
     models::{Message, Role},
     session,
@@ -76,29 +75,14 @@ pub async fn chat(State(state): State<AppState>, Form(form): Form<UiChatForm>) -
         }
     };
 
-    // RAG: inject relevant law chunks as ephemeral context (not persisted to session)
-    let rag_context = if let Some(pool) = state.db() {
-        match db::search_law(pool, &message, state.rag_top_k()).await {
-            Ok(chunks) if !chunks.is_empty() => Some(db::format_chunks(&chunks)),
-            Ok(_) => None,
-            Err(e) => {
-                tracing::warn!(error = %e, "law search failed, proceeding without RAG");
-                None
-            }
-        }
-    } else {
-        None
-    };
-
-    let mut api_messages: Vec<Message> = Vec::new();
-    if let Some(ctx) = rag_context {
-        api_messages.push(Message::new(Role::User, format!("[法條參考資料]\n{ctx}")));
-        api_messages.push(Message::new(Role::Assistant, "已閱讀法條參考資料，請提問。"));
-    }
-    api_messages.extend(session_messages.clone());
+    let mut api_messages = session_messages.clone();
     api_messages.push(Message::new(Role::User, message.clone()));
 
     let reply = match state.provider().chat(api_messages).await {
+        Ok(r) if r.starts_with("[SCOPE_REJECT]") => {
+            let reason = r["[SCOPE_REJECT]".len()..].trim();
+            return Html(error_fragment(reason).into_string());
+        }
         Ok(r) => r,
         Err(e) => {
             tracing::error!(error = %e, "AI provider error");
@@ -154,18 +138,21 @@ fn page() -> Markup {
                         }
                     }
 
-                    a href="/" class="new-chat-btn" {
+                    button type="button" class="new-chat-btn" {
                         (PreEscaped(r#"<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>"#))
                         " New conversation"
                     }
 
-                    div class="sidebar-section" { "Try asking" }
+                    div id="sidebar-examples" {
+                        div class="sidebar-section" { "Try asking" }
 
-                    div class="example" onclick="fillExample(this)" { "建築法第51條的退縮規定是什麼？" }
-                    div class="example" onclick="fillExample(this)" { "都市計畫法的使用分區有哪些類型？" }
-                    div class="example" onclick="fillExample(this)" { "建蔽率與容積率有何不同？" }
-                    div class="example" onclick="fillExample(this)" { "What are fire safety requirements under 消防法？" }
-                    div class="example" onclick="fillExample(this)" { "公寓大廈管理條例主要規範哪些事項？" }
+                        div class="example" { "建築法第51條的退縮規定是什麼？" }
+                        div class="example" { "都市計畫法的使用分區有哪些類型？" }
+                        div class="example" { "建蔽率與容積率有何不同？" }
+                        div class="example" { "What are fire safety requirements under 消防法？" }
+                        div class="example" { "公寓大廈管理條例主要規範哪些事項？" }
+                    }
+                    div id="sidebar-history" {}
 
                     div class="sidebar-footer" { "建築法規 AI · Legal Consultant" }
                 }
@@ -242,8 +229,8 @@ fn chat_fragment(user_msg: &str, assistant_msg: &str, session_id: &str) -> Marku
                  placeholder="輸入您的問題… 例：建築法第 51 條退縮規定為何？"
                  rows="1" maxlength="2000" hx-swap-oob="true" {}
 
-        // User message
-        div class="msg-row" {
+        // User message — data-session-id read by JS to create sidebar history entry
+        div class="msg-row" data-session-id=(session_id) {
             div class="msg-inner user" {
                 div class="msg-bubble user-bubble" { (user_msg) }
             }
@@ -264,6 +251,64 @@ fn error_fragment(msg: &str) -> Markup {
         div class="msg-error" {
             span class="err-icon" { "⚠" }
             " " (msg)
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Session history replay
+// ─────────────────────────────────────────────────────────────────
+
+pub async fn session_history(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Html<String> {
+    let mut redis = match state.redis() {
+        Some(r) => r,
+        None => {
+            return Html(
+                error_fragment("Session storage not configured.").into_string(),
+            );
+        }
+    };
+
+    let messages = match session::get_session(&mut redis, &session_id).await {
+        Ok(msgs) => msgs,
+        Err(e) => {
+            tracing::error!(error = %e, "session history load failed");
+            return Html(error_fragment("Session load failed.").into_string());
+        }
+    };
+
+    if messages.is_empty() {
+        return Html(error_fragment("Session not found or expired.").into_string());
+    }
+
+    Html(history_fragment(&messages).into_string())
+}
+
+fn history_fragment(messages: &[Message]) -> Markup {
+    html! {
+        @for msg in messages {
+            @match msg.role() {
+                Role::User => {
+                    div class="msg-row" {
+                        div class="msg-inner user" {
+                            div class="msg-bubble user-bubble" { (msg.content()) }
+                        }
+                    }
+                }
+                Role::Assistant => {
+                    div class="msg-row" {
+                        div class="msg-inner assistant" {
+                            div class="msg-av" {
+                                (PreEscaped(r#"<svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3 Q9.5 7 13 8 Q9.5 9 8 13 Q6.5 9 3 8 Q6.5 7 8 3 Z" fill="white" opacity="0.92"/></svg>"#))
+                            }
+                            div class="msg-bubble ai-bubble" data-md="" { (msg.content()) }
+                        }
+                    }
+                }
+            }
         }
     }
 }

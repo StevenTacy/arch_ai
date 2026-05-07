@@ -54,6 +54,7 @@ body { display: flex; height: 100dvh; overflow: hidden; }
     background: transparent;
     border: 1px solid var(--border2); border-radius: 8px;
     color: var(--text); text-decoration: none; font-size: 13px;
+    cursor: pointer; width: 100%; font: inherit;
     transition: background .15s;
 }
 .new-chat-btn:hover { background: var(--surf2); }
@@ -70,6 +71,20 @@ body { display: flex; height: 100dvh; overflow: hidden; }
     cursor: pointer; transition: background .15s, color .15s;
 }
 .example:hover { background: var(--surf2); color: var(--text); }
+
+.sidebar-history-item {
+    padding: 8px 12px; border-radius: 6px;
+    font-size: 12px; color: var(--muted); line-height: 1.45;
+    cursor: default;
+    transition: background .15s, color .15s, transform .18s ease;
+    transform-origin: left center;
+}
+.sidebar-history-item:hover,
+.sidebar-history-item:focus {
+    background: var(--surf2); color: var(--text);
+    transform: scale(1.04);
+    outline: none;
+}
 
 .sidebar-footer {
     margin-top: auto; padding: 12px;
@@ -110,7 +125,7 @@ header {
     gap: 12px; padding: 56px 24px; text-align: center;
     color: var(--muted);
 }
-.welcome-icon { font-size: 42px; opacity: .45; }
+.welcome-icon { opacity: .45; }
 .welcome h2   { font-size: 20px; font-weight: 500; color: var(--text); }
 .welcome p    { font-size: 13px; line-height: 1.75; max-width: 400px; }
 
@@ -133,11 +148,12 @@ header {
 .msg-inner.user { flex-direction: row-reverse; }
 
 .msg-av {
-    width: 28px; height: 28px; min-width: 28px; flex-shrink: 0;
-    background: var(--surf2); border: 1px solid var(--border2);
-    border-radius: 6px; margin-top: 2px;
+    width: 32px; height: 32px; min-width: 32px; flex-shrink: 0;
+    background: linear-gradient(135deg, #1a2744 0%, #243a6b 100%);
+    border: none;
+    border-radius: 8px; margin-top: 2px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 700; color: var(--muted);
+    box-shadow: 0 1px 6px rgba(26, 39, 68, .55);
 }
 
 .msg-bubble {

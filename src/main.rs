@@ -4,7 +4,6 @@ use axum::{
     Router,
     routing::{get, post},
 };
-use sqlx::postgres::PgPoolOptions;
 use tower_http::{
     cors::{Any, CorsLayer},
     services::ServeDir,
@@ -13,7 +12,6 @@ use tower_http::{
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 mod config;
-mod db;
 mod error;
 mod handlers;
 mod models;
@@ -79,34 +77,11 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    // PostgreSQL pool — optional; enables RAG when DATABASE_URL is set
-    let db_pool = match config.database_url() {
-        Some(url) => {
-            let pool = PgPoolOptions::new()
-                .max_connections(5)
-                .connect(url)
-                .await
-                .map_err(|e| anyhow::anyhow!("PostgreSQL connection failed: {e}"))?;
-
-            sqlx::migrate!()
-                .run(&pool)
-                .await
-                .map_err(|e| anyhow::anyhow!("Migration failed: {e}"))?;
-
-            tracing::info!("PostgreSQL connected, migrations applied");
-            Some(pool)
-        }
-        None => {
-            tracing::info!("DATABASE_URL not set — RAG disabled");
-            None
-        }
-    };
-
     // Redis connection manager — optional; enables session-based chat
     let redis_conn = match config.redis_url() {
         Some(url) => {
-            let client = redis::Client::open(url)
-                .map_err(|e| anyhow::anyhow!("Invalid Redis URL: {e}"))?;
+            let client =
+                redis::Client::open(url).map_err(|e| anyhow::anyhow!("Invalid Redis URL: {e}"))?;
             let manager = redis::aio::ConnectionManager::new(client)
                 .await
                 .map_err(|e| anyhow::anyhow!("Redis connection failed: {e}"))?;
@@ -120,13 +95,7 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    let app_state = AppState::new(
-        provider,
-        db_pool,
-        redis_conn,
-        config.rag_top_k(),
-        config.session_ttl_secs(),
-    );
+    let app_state = AppState::new(provider, redis_conn, config.session_ttl_secs());
 
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -137,6 +106,7 @@ async fn main() -> anyhow::Result<()> {
         .nest_service("/static", ServeDir::new("static"))
         .route("/", get(ui_handlers::index))
         .route("/chat", post(ui_handlers::chat))
+        .route("/session/:id", get(ui_handlers::session_history))
         .route("/health", get(handlers::health))
         .with_state(app_state)
         .layer(cors)
