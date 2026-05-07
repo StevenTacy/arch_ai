@@ -3,11 +3,54 @@ services:
   arch_ai:
     build: .
     ports: ['${PORT:-8080}:${PORT:-8080}']
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       AI_PROVIDER: ${AI_PROVIDER}
-      GEMINI_API_KEY: '{GEMINI_API_KEY}'
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-}
       PORT: ${PORT:-8080}
-      # CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-6}
       MAX_TOKENS: ${MAX_TOKENS:-4096}
       RUST_LOG: ${RUST_LOG:-arch_ai=info,tower_http=info}
+      DATABASE_URL: postgres://arch:arch@postgres:5432/arch_ai
+      REDIS_URL: redis://redis:6379
+      RAG_TOP_K: ${RAG_TOP_K:-5}
+      SESSION_TTL_SECS: ${SESSION_TTL_SECS:-3600}
     restart: unless-stopped
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: arch
+      POSTGRES_PASSWORD: arch
+      POSTGRES_DB: arch_ai
+    ports: [5432:5432]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U arch -d arch_ai]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:8-alpine
+    # volatile-lru: only evicts keys with TTL (all sessions qualify).
+    # Protects active sessions better than allkeys-lru under memory pressure.
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy volatile-lru
+      --maxmemory-samples 10
+      --hz 20
+    ports: [6379:6379]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  pgdata:
