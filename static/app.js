@@ -13,6 +13,14 @@ document.addEventListener('keydown', function (e) {
     }
 });
 
+// Clear textarea immediately on submit (before server responds)
+document.addEventListener('htmx:beforeRequest', function (e) {
+    if (e.detail.elt.id === 'chat-form') {
+        ta.value = '';
+        ta.style.height = 'auto';
+    }
+});
+
 // After htmx injects new content:
 //  - render markdown in .ai-bubble[data-md] elements
 //  - scroll messages to bottom
