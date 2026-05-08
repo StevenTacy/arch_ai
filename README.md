@@ -4,11 +4,17 @@ A chatbot that answers questions about Taiwan's construction law (台灣建築�
 
 ---
 
+## Demo
+
+<video src="arc_ai_feature_demo.mp4" controls width="100%"></video>
+
+---
+
 ## Requirements
 
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose
-- Rust >= 1.86 (to run the app locally)
-- An API key from one of: [Anthropic](https://console.anthropic.com/), [Google AI Studio](https://aistudio.google.com/), or [OpenAI](https://platform.openai.com/)
+- Rust >= 1.86 (optinoal, only if you wish to run project locally)
+- An API key from one of: [Anthropic](https://console.anthropic.com/), [Google AI Studio](https://aistudio.google.com/), [OpenAI](https://platform.openai.com/), or [OpenRouter (free api key usage)](https://openrouter.ai/)
 
 ---
 
@@ -22,13 +28,13 @@ git clone <repo-url> arch_ai && cd arch_ai
 
 ### 2. Configure your environment
 
-Copy the example file and open it in your editor:
+Create .env file for your API keys and settings:
 
 ```bash
-cp .env.example .env
+touch .env
 ```
 
-Pick your provider and copy the matching block into `.env`:
+Pick your ai provider and copy the matching block into `.env`:
 
 **Claude**
 ```env
@@ -66,7 +72,7 @@ PORT=your_desired_port
 # MAX_TOKENS=(optional)
 ```
 
-### 3. Start the supporting services
+### 3. Bootstrap the project with docker
 
 ```bash
 docker compose up -d
@@ -74,9 +80,10 @@ docker compose up -d
 
 This brings up PostgreSQL (law-chunk storage) and Redis (session cache).
 
-### 4. Run the app
+### 4. Bootstrap locally
 
 ```bash
+echo "REDIS_URL=your_redis_url" >> .env
 cargo run
 ```
 
@@ -101,13 +108,6 @@ Visit [http://localhost:8080](http://localhost:8080) in your browser and start a
 | `MAX_TOKENS` | no | `4096` | Maximum tokens per response |
 | `REDIS_URL` | no | — | Redis connection string (enables stateful `/v2/chat` sessions) |
 
-¹ Defaults: `claude-sonnet-4-6` / `gemini-2.0-flash` / `gpt-4o` / `llama3.2` (ollama)
+¹ Defaults: `claude-sonnet-4-6` / `gemini-2.0-flash` / `gpt-4o` 
 
 ---
-
-## How to bootstrap this project
-
-```bash
-docker compose up -d   # start postgres + redis, then run the app
-docker compose down    # stop and remove containers
-```
