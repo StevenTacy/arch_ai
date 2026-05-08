@@ -1,12 +1,10 @@
+
+
+https://github.com/user-attachments/assets/4feb105f-7e33-4187-b151-ae944609588e
+
 # arch_ai
 
 A chatbot that answers questions about Taiwan's construction law (台灣建築法規). Ask about specific statutes, permits, setback rules, structural requirements, and more — in Chinese or English.
-
----
-
-## Demo
-
-<video src="arc_ai_feature_demo.mp4" controls width="100%"></video>
 
 ---
 
@@ -91,7 +89,7 @@ The server starts on `http://localhost:8080` (or the port set in `PORT`).
 
 ### 5. Open the UI
 
-Visit [http://localhost:8080](http://localhost:8080) in your browser and start asking questions about Taiwan construction law.
+Visit [http://localhost:8080(Default address if not provide PORT)](http://localhost:8080) in your browser and start asking questions about Taiwan construction law.
 
 ---
 
