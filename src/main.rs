@@ -67,8 +67,7 @@ async fn main() -> anyhow::Result<()> {
                 config.model().to_string()
             };
             let cfg = config.clone().with_model(resolved_model);
-            Arc::new(OpenRouterProvider::new(cfg))
-                as Arc<dyn provider::AiProvider + Send + Sync>
+            Arc::new(OpenRouterProvider::new(cfg)) as Arc<dyn provider::AiProvider + Send + Sync>
         }
     };
 

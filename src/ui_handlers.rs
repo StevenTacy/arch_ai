@@ -29,6 +29,27 @@ pub struct UiChatForm {
     session_id: Option<String>,
 }
 
+/// Handler for `POST /chat` (HTMX form submission).
+///
+/// Receives a user message and an optional session ID from [`UiChatForm`], loads
+/// the existing conversation from Redis, calls the configured AI provider, saves
+/// the updated history, and returns an HTML fragment that HTMX appends to `#messages`.
+///
+/// # Parameters
+/// - `state` — shared [`AppState`] carrying the AI provider, Redis pool, and TTL config.
+/// - `form` — `message`: the user's input (max [`MAX_MESSAGE_CHARS`] chars);
+///   `session_id`: opaque string identifying the conversation (empty → new session generated).
+///
+/// # Returns
+///
+/// `Html<String>` — one of two possible fragments:
+///
+/// - **Success** — [`chat_fragment`]: two `div.msg-row` blocks (user bubble + AI bubble)
+///   plus two OOB swaps (`#session-id-input` and `#message-input`) so the client
+///   persists the session ID and clears the textarea.
+/// - **Error** — [`error_fragment`]: a `div.msg-error` with a bilingual message when
+///   input is empty/too long, Redis is unavailable, session load fails, or the AI
+///   provider returns an error or a `[SCOPE_REJECT]` prefix.
 pub async fn chat(State(state): State<AppState>, Form(form): Form<UiChatForm>) -> Html<String> {
     let message = form.message.trim().to_string();
 
@@ -259,6 +280,24 @@ fn error_fragment(msg: &str) -> Markup {
 // Session history replay
 // ─────────────────────────────────────────────────────────────────
 
+/// Handler for `GET /session/:session_id` (sidebar history replay).
+///
+/// Loads the full conversation stored under `session_id` from Redis and renders
+/// every turn as HTML. Called by the client when a user clicks a past session
+/// entry in the sidebar; the response replaces `#messages` with the replay.
+///
+/// # Parameters
+/// - `state` — shared [`AppState`]; Redis connection is required.
+/// - `session_id` — URL path segment identifying the session to replay.
+///
+/// # Returns
+///
+/// `Html<String>` — one of two possible fragments:
+///
+/// - **Success** — [`history_fragment`]: a sequence of `div.msg-row` blocks, one per
+///   stored [`Message`], rendered as user or assistant bubbles in chronological order.
+/// - **Error** — [`error_fragment`]: a `div.msg-error` when Redis is unconfigured,
+///   the session cannot be loaded, or the session ID is not found / has expired.
 pub async fn session_history(
     State(state): State<AppState>,
     Path(session_id): Path<String>,

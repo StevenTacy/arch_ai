@@ -36,7 +36,23 @@ When answering, you:
    [SCOPE_REJECT] <one sentence explaining why, in the same language the user wrote in>
    Do not answer the question. Do not add any other text before or after.";
 
+/// Abstraction over AI backends (Claude, Gemini, OpenAI, OpenRouter).
+///
+/// Implementors wrap a provider-specific HTTP client and translate the
+/// common [`Message`] history into the provider's wire format.
+/// The active implementation is selected at startup based on [`crate::config::ProviderKind`]
+/// and stored as `Arc<dyn AiProvider + Send + Sync>` in [`crate::handlers::AppState`].
 #[async_trait]
 pub trait AiProvider: Send + Sync {
+    /// Sends `messages` (full conversation history) to the AI backend and returns
+    /// the assistant's reply as a plain [`String`].
+    ///
+    /// Out-of-scope questions are signalled by a reply prefixed with `[SCOPE_REJECT]`
+    /// rather than an error, letting callers surface the rejection message to the user.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AppError`] on network failure, non-2xx upstream status, or
+    /// response deserialisation failure.
     async fn chat(&self, messages: Vec<Message>) -> Result<String, AppError>;
 }

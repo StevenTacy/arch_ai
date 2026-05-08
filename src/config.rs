@@ -2,12 +2,20 @@ use std::str::FromStr;
 
 use crate::error::AppError;
 
+/// Identifies which AI backend the service routes requests to.
+///
+/// Parsed from the `AI_PROVIDER` environment variable at startup via [`FromStr`].
+/// Each variant determines which API key env var is required and which default
+/// model ID is used when `AI_MODEL` is not set.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderKind {
+    /// Anthropic Claude — requires `ANTHROPIC_API_KEY`.
     Claude,
+    /// Google Gemini — requires `GEMINI_API_KEY`.
     Gemini,
+    /// OpenAI — requires `OPENAI_API_KEY`.
     OpenAi,
-    /// OpenRouter gateway — free models available.
+    /// OpenRouter gateway — requires `OPENROUTER_API_KEY`.
     OpenRouter,
 }
 
