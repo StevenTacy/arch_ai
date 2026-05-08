@@ -4,8 +4,6 @@ services:
     build: .
     ports: ['${PORT:-8080}:${PORT:-8080}']
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     environment:
@@ -18,28 +16,11 @@ services:
       PORT: ${PORT:-8080}
       MAX_TOKENS: ${MAX_TOKENS:-4096}
       RUST_LOG: ${RUST_LOG:-arch_ai=info,tower_http=info}
-      DATABASE_URL: postgres://arch:arch@postgres:5432/arch_ai
       REDIS_URL: redis://redis:6379
-      RAG_TOP_K: ${RAG_TOP_K:-5}
       SESSION_TTL_SECS: ${SESSION_TTL_SECS:-3600}
     restart: unless-stopped
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: arch
-      POSTGRES_PASSWORD: arch
-      POSTGRES_DB: arch_ai
-    ports: [5432:5432]
-    volumes: [pgdata:/var/lib/postgresql/data]
-    healthcheck:
-      test: [CMD-SHELL, pg_isready -U arch -d arch_ai]
-      interval: 5s
-      timeout: 5s
-      retries: 10
   redis:
     image: redis:8-alpine
-    # volatile-lru: only evicts keys with TTL (all sessions qualify).
-    # Protects active sessions better than allkeys-lru under memory pressure.
     command: >
       redis-server
       --maxmemory 256mb
@@ -52,5 +33,3 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
-volumes:
-  pgdata:
