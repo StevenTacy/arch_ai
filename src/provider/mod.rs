@@ -4,7 +4,6 @@ use crate::{error::AppError, models::Message};
 
 pub mod claude;
 pub mod gemini;
-pub mod mock;
 pub mod openai;
 pub mod openrouter;
 

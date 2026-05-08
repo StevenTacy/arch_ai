@@ -7,9 +7,7 @@ pub enum ProviderKind {
     Claude,
     Gemini,
     OpenAi,
-    /// Hardcoded demo responses — no network required.
-    Mock,
-    /// OpenRouter gateway — free models available; API key optional (falls back to Mock if absent).
+    /// OpenRouter gateway — free models available.
     OpenRouter,
 }
 
@@ -21,10 +19,9 @@ impl FromStr for ProviderKind {
             "claude" | "anthropic" => Ok(Self::Claude),
             "gemini" | "google" => Ok(Self::Gemini),
             "openai" | "codex" | "gpt" => Ok(Self::OpenAi),
-            "mock" | "demo" | "stub" => Ok(Self::Mock),
             "openrouter" | "or" => Ok(Self::OpenRouter),
             other => Err(AppError::Config(format!(
-                "unknown AI_PROVIDER '{other}'; valid values: claude, gemini, openai"
+                "unknown AI_PROVIDER '{other}'; valid values: claude, gemini, openai, openrouter"
             ))),
         }
     }
@@ -75,6 +72,32 @@ impl Config {
         self
     }
 
+    /// Constructs [`Config`] by reading all fields from the process environment.
+    ///
+    /// Reads `AI_PROVIDER` first to determine which provider's API key and default model
+    /// to use, then resolves remaining variables with the defaults shown below.
+    ///
+    /// | Variable | Required | Default |
+    /// |---|---|---|
+    /// | `AI_PROVIDER` | no | `"claude"` |
+    /// | `ANTHROPIC_API_KEY` | if provider is `claude` | — |
+    /// | `GEMINI_API_KEY` | if provider is `gemini` | — |
+    /// | `OPENAI_API_KEY` | if provider is `openai` | — |
+    /// | `OPENROUTER_API_KEY` | if provider is `openrouter` | — |
+    /// | `AI_MODEL` | no | provider-specific default |
+    /// | `PORT` | no | `8080` |
+    /// | `MAX_TOKENS` | no | `4096` |
+    /// | `REDIS_URL` | no | `None` |
+    /// | `SESSION_TTL_SECS` | no | `3600` |
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AppError::Config`] if:
+    /// - `AI_PROVIDER` holds an unrecognised value.
+    /// - The required API key for the resolved provider is absent.
+    /// - `PORT` cannot be parsed as a `u16`.
+    /// - `MAX_TOKENS` cannot be parsed as a `u32`.
+    /// - `SESSION_TTL_SECS` cannot be parsed as a `u64`.
     pub fn from_env() -> Result<Self, AppError> {
         let provider: ProviderKind = std::env::var("AI_PROVIDER")
             .unwrap_or_else(|_| "claude".into())
@@ -96,10 +119,9 @@ impl Config {
                     .map_err(|_| AppError::Config("OPENAI_API_KEY is not set".into()))?,
                 "gpt-4o",
             ),
-            ProviderKind::Mock => (String::new(), "mock"),
-            // Key is optional — empty string triggers Mock fallback in main.rs
             ProviderKind::OpenRouter => (
-                std::env::var("OPENROUTER_API_KEY").unwrap_or_default(),
+                std::env::var("OPENROUTER_API_KEY")
+                    .map_err(|_| AppError::Config("OPENROUTER_API_KEY is not set".into()))?,
                 "auto",
             ),
         };

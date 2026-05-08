@@ -24,7 +24,6 @@ use handlers::AppState;
 use provider::{
     claude::ClaudeProvider,
     gemini::GeminiProvider,
-    mock::MockProvider,
     openai::OpenAiProvider,
     openrouter::{OpenRouterProvider, discover_free_model},
 };
@@ -33,6 +32,7 @@ use provider::{
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
 
+    // setting up log functionalities
     tracing_subscriber::registry()
         .with(EnvFilter::new(
             std::env::var("RUST_LOG").unwrap_or_else(|_| "arch_ai=debug,tower_http=debug".into()),
@@ -40,6 +40,7 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    // parse provided environmental variables for configurations
     let config = config::Config::from_env()?;
     let port = config.port();
 
@@ -49,31 +50,25 @@ async fn main() -> anyhow::Result<()> {
         ProviderKind::Claude => Arc::new(ClaudeProvider::new(config.clone())),
         ProviderKind::Gemini => Arc::new(GeminiProvider::new(config.clone())),
         ProviderKind::OpenAi => Arc::new(OpenAiProvider::new(config.clone())),
-        ProviderKind::Mock => Arc::new(MockProvider::new()),
         ProviderKind::OpenRouter => {
-            if config.api_key().is_empty() {
-                tracing::warn!("OPENROUTER_API_KEY not set — running in demo mode (Mock)");
-                Arc::new(MockProvider::new()) as Arc<dyn provider::AiProvider + Send + Sync>
-            } else {
-                let resolved_model = if config.model() == "auto" {
-                    match discover_free_model(&config).await {
-                        Ok(m) => {
-                            tracing::info!(model = %m, "OpenRouter: auto-selected free model");
-                            m
-                        }
-                        Err(e) => {
-                            let fallback = "meta-llama/llama-3.2-1b-instruct:free";
-                            tracing::warn!(error = %e, fallback, "OpenRouter: model discovery failed, using fallback");
-                            fallback.into()
-                        }
+            let resolved_model = if config.model() == "auto" {
+                match discover_free_model(&config).await {
+                    Ok(m) => {
+                        tracing::info!(model = %m, "OpenRouter: auto-selected free model");
+                        m
                     }
-                } else {
-                    config.model().to_string()
-                };
-                let cfg = config.clone().with_model(resolved_model);
-                Arc::new(OpenRouterProvider::new(cfg))
-                    as Arc<dyn provider::AiProvider + Send + Sync>
-            }
+                    Err(e) => {
+                        let fallback = "meta-llama/llama-3.2-1b-instruct:free";
+                        tracing::warn!(error = %e, fallback, "OpenRouter: model discovery failed, using fallback");
+                        fallback.into()
+                    }
+                }
+            } else {
+                config.model().to_string()
+            };
+            let cfg = config.clone().with_model(resolved_model);
+            Arc::new(OpenRouterProvider::new(cfg))
+                as Arc<dyn provider::AiProvider + Send + Sync>
         }
     };
 
@@ -107,7 +102,6 @@ async fn main() -> anyhow::Result<()> {
         .route("/", get(ui_handlers::index))
         .route("/chat", post(ui_handlers::chat))
         .route("/session/:id", get(ui_handlers::session_history))
-        .route("/health", get(handlers::health))
         .with_state(app_state)
         .layer(cors)
         .layer(TraceLayer::new_for_http());

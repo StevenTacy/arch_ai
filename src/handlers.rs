@@ -1,9 +1,6 @@
-use std::sync::Arc;
-
-use axum::Json;
-use redis::aio::ConnectionManager;
-
 use crate::provider::AiProvider;
+use redis::aio::ConnectionManager;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -19,7 +16,11 @@ impl AppState {
         redis: Option<ConnectionManager>,
         session_ttl_secs: u64,
     ) -> Self {
-        Self { provider, redis, session_ttl_secs }
+        Self {
+            provider,
+            redis,
+            session_ttl_secs,
+        }
     }
 
     pub fn provider(&self) -> &dyn AiProvider {
@@ -34,8 +35,4 @@ impl AppState {
     pub fn session_ttl_secs(&self) -> u64 {
         self.session_ttl_secs
     }
-}
-
-pub async fn health() -> Json<serde_json::Value> {
-    Json(serde_json::json!({ "status": "ok" }))
 }
